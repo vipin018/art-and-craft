@@ -402,4 +402,40 @@ window.onload = function () {
 
     lastMouse.copy(mouse);
   }
+
+  const navLinks = document.querySelectorAll('.nav-links a');
+
+  navLinks.forEach(link => {
+      const split = new SplitType(link, { types: 'chars' });
+      const chars = split.chars;
+
+      const tl = gsap.timeline({ paused: true });
+      tl.to(chars, {
+          y: -10,
+          opacity: 0,
+          stagger: {
+              amount: 0.4,
+              from: "center",
+              grid: "auto",
+              ease: "power2.inOut"
+          }
+      }).to(chars, {
+          y: 10,
+          opacity: 0,
+          duration: 0
+      }).to(chars, {
+          y: 0,
+          opacity: 1,
+          stagger: {
+              amount: 0.4,
+              from: "center",
+              grid: "auto",
+              ease: "power2.inOut"
+          }
+      });
+
+      link.addEventListener('mouseenter', () => {
+          tl.restart();
+      });
+  });
 };

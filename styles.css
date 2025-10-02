@@ -2,6 +2,8 @@ body {
     margin: 0;
     overflow: hidden;
     font-family: 'Rancho', cursive;
+    background: radial-gradient(ellipse 100% 60% at 20% 40%, #a8ffc2 0%, #FCF4E7 100%);
+
 }
 
 nav {
@@ -9,30 +11,41 @@ nav {
     top: 0;
     left: 0;
     width: 100%;
-    padding: 1rem; /* Increased padding */
+    padding: 1rem 2rem;
     display: flex;
     justify-content: space-around;
     align-items: center;
     z-index: 2;
-    color: #333333; /* Changed to dark color */
+    color: #333333;
+    box-sizing: border-box;
+}
+
+nav::after {
+    content: '';
+    position: absolute;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    height: 1px;
+    background: linear-gradient(to right, transparent, #333333, transparent);
 }
 
 .logo {
     font-size: 1.5rem;
     font-weight: bold;
-    text-spacing-trim: both;
 }
 
 .nav-links {
     list-style: none;
     display: flex;
-    gap: 2rem; /* Increased gap */
+    gap: 2rem;
 }
 
 .nav-links a {
-    color: #333333; /* Changed to dark color */
+    color: #333333;
     text-decoration: none;
-    font-size: 1.5rem;
+    font-size: 1.25rem;
 }
 
 #center-text {
@@ -40,11 +53,12 @@ nav {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    color: #333333; /* Changed to dark color */
+    color: #333333;
     font-family: 'Rancho', cursive;
-    font-size: 5em;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1); /* Adjusted text shadow for dark text */
+    font-size: 8rem;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
     pointer-events: none;
+    white-space: nowrap;
 }
 
 #ui {

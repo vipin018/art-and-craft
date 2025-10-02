@@ -1,7 +1,7 @@
 body {
     margin: 0;
     overflow: hidden;
-    font-family: 'Rancho', cursive;
+    font-family: 'Kite One', cursive;
     background: radial-gradient(ellipse 100% 60% at 20% 40%, #a8ffc2 0%, #FCF4E7 100%);
 }
 
@@ -38,7 +38,7 @@ nav::after {
 
 .nav-links {
     list-style: none;
-    display: flex;
+    display: flex; /* Ensure nav-links inside nav are visible by default */
     gap: 2rem;
 }
 
@@ -75,18 +75,85 @@ nav::after {
     width: 50%;
 }
 
-#center-text {
+#main-content-text {
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
+    text-align: center;
+    pointer-events: none; /* Ensure fluid simulation is interactive */
+}
+
+.small-text {
     color: #333333;
-    font-family: 'Rancho', cursive;
-    font-size: 8rem;
-    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
-    pointer-events: none;
+    font-family: 'Kite One', cursive; /* Ensure Rancho font */
+    font-size: 1.5rem; /* Small font size */
+    text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.1);
     white-space: nowrap;
 }
+
+.top-small-text {
+    margin-bottom: 1rem; /* Adjust spacing */
+    transform: translateX(-10px); /* Subtle offset */
+}
+
+.bottom-small-text {
+    margin-top: 1rem; /* Adjust spacing */
+    transform: translateX(10px); /* Subtle offset */
+}
+
+#center-text {
+    color: #333333;
+    font-family: 'Kite One', cursive; /* Ensure Rancho font */
+    font-size: 8rem;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+    white-space: nowrap;
+}
+
+.india-flag-gradient {
+  font-size: 1.5rem;
+  font-weight:900;
+  text-transform: uppercase;
+  display: inline-block;
+  background: linear-gradient(to right, #FF9933, #FFFFFF, #138808);
+  background-size: 300% 300%;
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+  font-family: "Rancho", cursive;
+  letter-spacing: 3px;
+  
+  /* wave effect */
+  animation: flagWave 3s linear infinite;
+}
+
+/* Wave animation */
+@keyframes flagWave {
+  0% {
+    background-position: 0% 50%;
+    transform: skewY(2deg) translateY(0px);
+  }
+  25% {
+    background-position: 50% 40%;
+    transform: skewY(-2deg) translateY(-2px);
+  }
+  50% {
+    background-position: 100% 60%;
+    transform: skewY(2deg) translateY(2px);
+  }
+  75% {
+    background-position: 50% 40%;
+    transform: skewY(-2deg) translateY(-2px);
+  }
+  100% {
+    background-position: 0% 50%;
+    transform: skewY(2deg) translateY(0px);
+  }
+}
+
+
+
 
 #ui {
     display: none;
@@ -110,7 +177,7 @@ canvas {
     }
 
     nav .nav-links {
-        display: none; /* Hide original nav-links */
+        display: none; /* Hide nav-links inside nav for mobile */
     }
 
     .logo {
@@ -157,8 +224,27 @@ canvas {
         display: none;
     }
 
+    #main-content-text {
+        /* Re-apply mobile specific styles for vertical layout */
+        padding: 1rem;
+    }
+
+    .small-text {
+        font-size: 1rem;
+    }
+
+    .top-small-text {
+        margin-bottom: 0.5rem;
+        transform: translateX(-5px);
+    }
+
+    .bottom-small-text {
+        margin-top: 0.5rem;
+        transform: translateX(5px);
+    }
+
     #center-text {
-        font-size: 4rem; /* Adjusted for better fit on small screens */
+        font-size: 4rem;
     }
 }
 
@@ -183,5 +269,18 @@ canvas {
 
     #mobile-nav-links {
         display: none; /* Hide mobile nav links on tablet */
+    }
+
+    #main-content-text {
+        /* Re-apply tablet specific styles for vertical layout */
+        padding: 0;
+    }
+
+    .left-section, .right-section {
+        font-size: 1.2rem;
+    }
+
+    .center-section {
+        font-size: 6rem;
     }
 }

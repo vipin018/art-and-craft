@@ -1,0 +1,458 @@
+<script type="text/javascript">
+        var gk_isXlsx = false;
+        var gk_xlsxFileLookup = {};
+        var gk_fileData = {};
+        function filledCell(cell) {
+          return cell !== '' && cell != null;
+        }
+        function loadFileData(filename) {
+        if (gk_isXlsx && gk_xlsxFileLookup[filename]) {
+            try {
+                var workbook = XLSX.read(gk_fileData[filename], { type: 'base64' });
+                var firstSheetName = workbook.SheetNames[0];
+                var worksheet = workbook.Sheets[firstSheetName];
+
+                // Convert sheet to JSON to filter blank rows
+                var jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1, blankrows: false, defval: '' });
+                // Filter out blank rows (rows where all cells are empty, null, or undefined)
+                var filteredData = jsonData.filter(row => row.some(filledCell));
+
+                // Heuristic to find the header row by ignoring rows with fewer filled cells than the next row
+                var headerRowIndex = filteredData.findIndex((row, index) =>
+                  row.filter(filledCell).length >= filteredData[index + 1]?.filter(filledCell).length
+                );
+                // Fallback
+                if (headerRowIndex === -1 || headerRowIndex > 25) {
+                  headerRowIndex = 0;
+                }
+
+                // Convert filtered JSON back to CSV
+                var csv = XLSX.utils.aoa_to_sheet(filteredData.slice(headerRowIndex)); // Create a new sheet from filtered array of arrays
+                csv = XLSX.utils.sheet_to_csv(csv, { header: 1 });
+                return csv;
+            } catch (e) {
+                console.error(e);
+                return "";
+            }
+        }
+        return gk_fileData[filename] || "";
+        }
+        </script><!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Enhanced Swirling Fluid Simulation</title>
+    <style>
+        body { margin: 0; overflow: hidden; }
+        #ui { position: absolute; top: 10px; left: 10px; color: white; font-family: Arial; }
+        canvas { display: block; }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.min.js"></script>
+</head>
+<body>
+    <div id="ui">
+        <label>Dissipation: <input type="range" id="dissipation" min="0.95" max="1.0" step="0.001" value="0.98"></label><br>
+        <label>Splat Radius: <input type="range" id="radius" min="0.01" max="0.1" step="0.001" value="0.025"></label>
+    </div>
+    <script>
+        let camera, scene, renderer;
+        let mesh;
+        let rtDensityA, rtDensityB;
+        let rtVelocityA, rtVelocityB;
+        let rtDivergence, rtPressureA, rtPressureB;
+        let matSplatDensity, matSplatVelocity, matAdvect, matDisplay, matDivergence, matPressure, matSubtractGradient;
+        let mouse = new THREE.Vector2(0.5, 0.5);
+        let lastMouse = new THREE.Vector2(0.5, 0.5);
+        let isMouseDown = false;
+        let dissipation = 0.98;
+        let splatRadius = 0.025;
+
+        init();
+        animate();
+
+        function init() {
+            camera = new THREE.OrthographicCamera(-1, 1, 1, -1, 0, 1);
+            scene = new THREE.Scene();
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            document.body.appendChild(renderer.domElement);
+
+            const size = 512;
+            const rtOptions = {
+                minFilter: THREE.LinearFilter,
+                magFilter: THREE.LinearFilter,
+                format: THREE.RGBAFormat,
+                type: THREE.FloatType
+            };
+
+            rtDensityA = new THREE.WebGLRenderTarget(size, size, rtOptions);
+            rtDensityB = new THREE.WebGLRenderTarget(size, size, rtOptions);
+            rtVelocityA = new THREE.WebGLRenderTarget(size, size, rtOptions);
+            rtVelocityB = new THREE.WebGLRenderTarget(size, size, rtOptions);
+            rtDivergence = new THREE.WebGLRenderTarget(size, size, rtOptions);
+            rtPressureA = new THREE.WebGLRenderTarget(size, size, rtOptions);
+            rtPressureB = new THREE.WebGLRenderTarget(size, size, rtOptions);
+
+            // Clear initial targets
+            renderer.setRenderTarget(rtDensityA);
+            renderer.clearColor(new THREE.Color(0, 0, 0), 0);
+            renderer.clear(true, true);
+            renderer.setRenderTarget(rtVelocityA);
+            renderer.clear(true, true);
+            renderer.setRenderTarget(rtPressureA);
+            renderer.clear(true, true);
+            renderer.setRenderTarget(null);
+
+            const geometry = new THREE.PlaneGeometry(2, 2);
+
+            // Splat density
+            matSplatDensity = new THREE.ShaderMaterial({
+                uniforms: {
+                    uTexture: { value: null },
+                    uPoint: { value: new THREE.Vector2() },
+                    uColor: { value: new THREE.Vector3() },
+                    uRadius: { value: splatRadius }
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform sampler2D uTexture;
+                    uniform vec2 uPoint;
+                    uniform vec3 uColor;
+                    uniform float uRadius;
+                    varying vec2 vUv;
+                    void main() {
+                        vec4 base = texture2D(uTexture, vUv);
+                        vec2 p = vUv - uPoint;
+                        float d = length(p);
+                        float expVal = exp(- (d * d) / (uRadius * uRadius));
+                        vec3 splat = expVal * uColor * 0.5; // Softer splat
+                        gl_FragColor = vec4(base.rgb + splat, 1.0);
+                    }
+                `,
+                depthTest: false
+            });
+
+            // Splat velocity
+            matSplatVelocity = new THREE.ShaderMaterial({
+                uniforms: {
+                    uTexture: { value: null },
+                    uPoint: { value: new THREE.Vector2() },
+                    uForce: { value: new THREE.Vector2() },
+                    uRadius: { value: splatRadius }
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform sampler2D uTexture;
+                    uniform vec2 uPoint;
+                    uniform vec2 uForce;
+                    uniform float uRadius;
+                    varying vec2 vUv;
+                    void main() {
+                        vec4 base = texture2D(uTexture, vUv);
+                        vec2 p = vUv - uPoint;
+                        float d = length(p);
+                        float expVal = exp(- (d * d) / (uRadius * uRadius));
+                        vec2 splat = expVal * uForce;
+                        vec2 result = base.rg + splat;
+                        float len = length(result);
+                        if (len > 1.0) result = result / len; // Clamp velocity
+                        gl_FragColor = vec4(result, base.ba);
+                    }
+                `,
+                depthTest: false
+            });
+
+            // Compute divergence
+            matDivergence = new THREE.ShaderMaterial({
+                uniforms: {
+                    uVelocityTexture: { value: null },
+                    uResolution: { value: new THREE.Vector2(size, size) }
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform sampler2D uVelocityTexture;
+                    uniform vec2 uResolution;
+                    varying vec2 vUv;
+                    void main() {
+                        vec2 texel = 1.0 / uResolution;
+                        vec2 right = texture2D(uVelocityTexture, vUv + vec2(texel.x, 0.0)).rg;
+                        vec2 left = texture2D(uVelocityTexture, vUv - vec2(texel.x, 0.0)).rg;
+                        vec2 up = texture2D(uVelocityTexture, vUv + vec2(0.0, texel.y)).rg;
+                        vec2 down = texture2D(uVelocityTexture, vUv - vec2(0.0, texel.y)).rg;
+                        float div = 0.5 * ((right.x - left.x) + (up.y - down.y));
+                        gl_FragColor = vec4(div, 0.0, 0.0, 1.0);
+                    }
+                `,
+                depthTest: false
+            });
+
+            // Solve pressure (Jacobi iteration)
+            matPressure = new THREE.ShaderMaterial({
+                uniforms: {
+                    uPressureTexture: { value: null },
+                    uDivergenceTexture: { value: null },
+                    uResolution: { value: new THREE.Vector2(size, size) }
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform sampler2D uPressureTexture;
+                    uniform sampler2D uDivergenceTexture;
+                    uniform vec2 uResolution;
+                    varying vec2 vUv;
+                    void main() {
+                        vec2 texel = 1.0 / uResolution;
+                        float right = texture2D(uPressureTexture, vUv + vec2(texel.x, 0.0)).r;
+                        float left = texture2D(uPressureTexture, vUv - vec2(texel.x, 0.0)).r;
+                        float up = texture2D(uPressureTexture, vUv + vec2(0.0, texel.y)).r;
+                        float down = texture2D(uPressureTexture, vUv - vec2(0.0, texel.y)).r;
+                        float div = texture2D(uDivergenceTexture, vUv).r;
+                        float pressure = (right + left + up + down - div) * 0.25;
+                        gl_FragColor = vec4(pressure, 0.0, 0.0, 1.0);
+                    }
+                `,
+                depthTest: false
+            });
+
+            // Subtract pressure gradient
+            matSubtractGradient = new THREE.ShaderMaterial({
+                uniforms: {
+                    uVelocityTexture: { value: null },
+                    uPressureTexture: { value: null },
+                    uResolution: { value: new THREE.Vector2(size, size) }
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform sampler2D uVelocityTexture;
+                    uniform sampler2D uPressureTexture;
+                    uniform vec2 uResolution;
+                    varying vec2 vUv;
+                    void main() {
+                        vec2 texel = 1.0 / uResolution;
+                        float right = texture2D(uPressureTexture, vUv + vec2(texel.x, 0.0)).r;
+                        float left = texture2D(uPressureTexture, vUv - vec2(texel.x, 0.0)).r;
+                        float up = texture2D(uPressureTexture, vUv + vec2(0.0, texel.y)).r;
+                        float down = texture2D(uPressureTexture, vUv - vec2(0.0, texel.y)).r;
+                        vec2 vel = texture2D(uVelocityTexture, vUv).rg;
+                        vec2 grad = 0.5 * vec2(right - left, up - down);
+                        gl_FragColor = vec4(vel - grad, 0.0, 1.0);
+                    }
+                `,
+                depthTest: false
+            });
+
+            // Advect
+            matAdvect = new THREE.ShaderMaterial({
+                uniforms: {
+                    uTexture: { value: null },
+                    uVelocityTexture: { value: null },
+                    uDt: { value: 0.016 },
+                    uDissipation: { value: dissipation },
+                    uResolution: { value: new THREE.Vector2(size, size) }
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform sampler2D uTexture;
+                    uniform sampler2D uVelocityTexture;
+                    uniform float uDt;
+                    uniform float uDissipation;
+                    uniform vec2 uResolution;
+                    varying vec2 vUv;
+                    void main() {
+                        vec2 vel = texture2D(uVelocityTexture, vUv).rg;
+                        vec2 offset = (vel / uResolution) * uDt;
+                        vec2 backUv = clamp(vUv - offset, 0.0, 1.0); // Prevent boundary issues
+                        vec4 color = texture2D(uTexture, backUv);
+                        gl_FragColor = color * uDissipation;
+                    }
+                `,
+                depthTest: false
+            });
+
+            // Display with bloom effect
+            matDisplay = new THREE.ShaderMaterial({
+                uniforms: {
+                    uTexture: { value: null },
+                    uResolution: { value: new THREE.Vector2(size, size) }
+                },
+                vertexShader: `
+                    varying vec2 vUv;
+                    void main() {
+                        vUv = uv;
+                        gl_Position = vec4(position, 1.0);
+                    }
+                `,
+                fragmentShader: `
+                    uniform sampler2D uTexture;
+                    uniform vec2 uResolution;
+                    varying vec2 vUv;
+                    void main() {
+                        vec3 dens = texture2D(uTexture, vUv).rgb;
+                        vec2 texel = 1.0 / uResolution;
+                        vec3 bloom = vec3(0.0);
+                        for (int i = -2; i <= 2; i++) {
+                            for (int j = -2; j <= 2; j++) {
+                                vec2 offset = vec2(float(i), float(j)) * texel * 2.0;
+                                bloom += texture2D(uTexture, vUv + offset).rgb * 0.04;
+                            }
+                        }
+                        vec3 color = 0.6 + 0.4 * sin(dens * 6.28 + vec3(0.0, 2.0, 4.0));
+                        color += bloom * 0.3; // Subtle bloom
+                        gl_FragColor = vec4(color, 1.0);
+                    }
+                `,
+                depthTest: false
+            });
+
+            mesh = new THREE.Mesh(geometry, matDisplay);
+            scene.add(mesh);
+
+            // Mouse and UI events
+            renderer.domElement.addEventListener('mousemove', (e) => {
+                mouse.x = (e.clientX / window.innerWidth);
+                mouse.y = 1.0 - (e.clientY / window.innerHeight);
+            });
+            renderer.domElement.addEventListener('mousedown', () => isMouseDown = true);
+            renderer.domElement.addEventListener('mouseup', () => isMouseDown = false);
+            document.getElementById('dissipation').addEventListener('input', (e) => {
+                dissipation = parseFloat(e.target.value);
+            });
+            document.getElementById('radius').addEventListener('input', (e) => {
+                splatRadius = parseFloat(e.target.value);
+            });
+
+            window.addEventListener('resize', () => {
+                renderer.setSize(window.innerWidth, window.innerHeight);
+            });
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+
+            const dt = 0.016;
+
+            if (isMouseDown) {
+                const dx = (mouse.x - lastMouse.x) * 20.0;
+                const dy = (mouse.y - lastMouse.y) * 20.0;
+                const force = new THREE.Vector2(dx, dy);
+                const forceLen = force.length();
+                if (forceLen > 1.0) force.multiplyScalar(1.0 / forceLen); // Clamp force
+
+                const hue = Math.random() * 6.28;
+                const color = new THREE.Vector3(
+                    Math.sin(hue) * 0.3 + 0.7,
+                    Math.sin(hue + 2.1) * 0.3 + 0.7,
+                    Math.sin(hue + 4.2) * 0.3 + 0.7
+                );
+
+                // Splat velocity
+                matSplatVelocity.uniforms.uTexture.value = rtVelocityA.texture;
+                matSplatVelocity.uniforms.uPoint.value = mouse;
+                matSplatVelocity.uniforms.uForce.value = force;
+                matSplatVelocity.uniforms.uRadius.value = splatRadius;
+                mesh.material = matSplatVelocity;
+                renderer.setRenderTarget(rtVelocityB);
+                renderer.render(scene, camera);
+                [rtVelocityA, rtVelocityB] = [rtVelocityB, rtVelocityA];
+
+                // Splat density
+                matSplatDensity.uniforms.uTexture.value = rtDensityA.texture;
+                matSplatDensity.uniforms.uPoint.value = mouse;
+                matSplatDensity.uniforms.uColor.value = color;
+                matSplatDensity.uniforms.uRadius.value = splatRadius;
+                mesh.material = matSplatDensity;
+                renderer.setRenderTarget(rtDensityB);
+                renderer.render(scene, camera);
+                [rtDensityA, rtDensityB] = [rtDensityB, rtDensityA];
+            }
+
+            // Advect velocity
+            matAdvect.uniforms.uTexture.value = rtVelocityA.texture;
+            matAdvect.uniforms.uVelocityTexture.value = rtVelocityA.texture;
+            matAdvect.uniforms.uDt.value = dt;
+            matAdvect.uniforms.uDissipation.value = dissipation;
+            mesh.material = matAdvect;
+            renderer.setRenderTarget(rtVelocityB);
+            renderer.render(scene, camera);
+            [rtVelocityA, rtVelocityB] = [rtVelocityB, rtVelocityA];
+
+            // Compute divergence
+            matDivergence.uniforms.uVelocityTexture.value = rtVelocityA.texture;
+            mesh.material = matDivergence;
+            renderer.setRenderTarget(rtDivergence);
+            renderer.render(scene, camera);
+
+            // Solve pressure (20 Jacobi iterations)
+            for (let i = 0; i < 20; i++) {
+                matPressure.uniforms.uPressureTexture.value = rtPressureA.texture;
+                matPressure.uniforms.uDivergenceTexture.value = rtDivergence.texture;
+                mesh.material = matPressure;
+                renderer.setRenderTarget(rtPressureB);
+                renderer.render(scene, camera);
+                [rtPressureA, rtPressureB] = [rtPressureB, rtPressureA];
+            }
+
+            // Subtract pressure gradient
+            matSubtractGradient.uniforms.uVelocityTexture.value = rtVelocityA.texture;
+            matSubtractGradient.uniforms.uPressureTexture.value = rtPressureA.texture;
+            mesh.material = matSubtractGradient;
+            renderer.setRenderTarget(rtVelocityB);
+            renderer.render(scene, camera);
+            [rtVelocityA, rtVelocityB] = [rtVelocityB, rtVelocityA];
+
+            // Advect density
+            matAdvect.uniforms.uTexture.value = rtDensityA.texture;
+            matAdvect.uniforms.uVelocityTexture.value = rtVelocityA.texture;
+            matAdvect.uniforms.uDt.value = dt;
+            matAdvect.uniforms.uDissipation.value = dissipation;
+            mesh.material = matAdvect;
+            renderer.setRenderTarget(rtDensityB);
+            renderer.render(scene, camera);
+            [rtDensityA, rtDensityB] = [rtDensityB, rtDensityA];
+
+            // Display
+            matDisplay.uniforms.uTexture.value = rtDensityA.texture;
+            mesh.material = matDisplay;
+            renderer.setRenderTarget(null);
+            renderer.render(scene, camera);
+
+            lastMouse.copy(mouse);
+        }
+    </script>
+</body>
+</html>

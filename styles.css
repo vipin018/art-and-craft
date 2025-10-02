@@ -1,0 +1,56 @@
+body {
+    margin: 0;
+    overflow: hidden;
+    font-family: 'Rancho', cursive;
+}
+
+nav {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    padding: 1rem; /* Increased padding */
+    display: flex;
+    justify-content: space-around;
+    align-items: center;
+    z-index: 2;
+    color: #333333; /* Changed to dark color */
+}
+
+.logo {
+    font-size: 1.5rem;
+    font-weight: bold;
+    text-spacing-trim: both;
+}
+
+.nav-links {
+    list-style: none;
+    display: flex;
+    gap: 2rem; /* Increased gap */
+}
+
+.nav-links a {
+    color: #333333; /* Changed to dark color */
+    text-decoration: none;
+    font-size: 1.5rem;
+}
+
+#center-text {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #333333; /* Changed to dark color */
+    font-family: 'Rancho', cursive;
+    font-size: 5em;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1); /* Adjusted text shadow for dark text */
+    pointer-events: none;
+}
+
+#ui {
+    display: none;
+}
+
+canvas {
+    display: block;
+}

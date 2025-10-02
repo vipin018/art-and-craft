@@ -38,13 +38,41 @@ nav::after {
 .nav-links {
     list-style: none;
     display: flex;
-    gap: 2rem;
+    gap: 3rem;
 }
 
 .nav-links a {
     color: #333333;
     text-decoration: none;
     font-size: 1.5rem;
+    position: relative;
+    transition: opacity 0.3s ease-in-out;
+}
+
+.nav-links a::before,
+.nav-links a::after {
+    content: '';
+    position: absolute;
+    bottom: -5px;
+    width: 0;
+    height: 1px;
+    background: #333333;
+    transition: width 0.3s ease-in-out;
+}
+
+.nav-links a::before {
+    left: 100%;
+    background: linear-gradient(to left, #333333 50%, transparent);
+}
+
+.nav-links a::after {
+    right: 100%;
+    background: linear-gradient(to right, #333333 50%, transparent);
+}
+
+.nav-links a:hover::before,
+.nav-links a:hover::after {
+    width: 50%;
 }
 
 #center-text {
@@ -86,7 +114,7 @@ canvas {
     }
 
     .nav-links a {
-        font-size: 1.5rem; /* Increase nav links font size */
+        font-size:5rem; /* Increase nav links font size */
     }
 
     nav::after {

@@ -409,33 +409,41 @@ window.onload = function () {
       const split = new SplitType(link, { types: 'chars' });
       const chars = split.chars;
 
-      const tl = gsap.timeline({ paused: true });
+      const tl = gsap.timeline({ paused: true, reversed: true });
       tl.to(chars, {
-          y: -10,
-          opacity: 0,
+          duration: 0.4,
+          rotationY: 360,
+          scale: 1.2,
+          ease: "power2.out",
           stagger: {
-              amount: 0.4,
-              from: "center",
-              grid: "auto",
-              ease: "power2.inOut"
+              each: 0.1,
+              from: "random"
           }
       }).to(chars, {
-          y: 10,
-          opacity: 0,
-          duration: 0
-      }).to(chars, {
-          y: 0,
-          opacity: 1,
+          duration: 0.4,
+          rotationY: 0,
+          scale: 1.5,
+          ease: "power2.in",
           stagger: {
-              amount: 0.4,
-              from: "center",
-              grid: "auto",
-              ease: "power2.inOut"
+              each: 0.1,
+              from: "random"
           }
       });
 
       link.addEventListener('mouseenter', () => {
-          tl.restart();
+          tl.play();
+          navLinks.forEach(otherLink => {
+              if (otherLink !== link) {
+                  gsap.to(otherLink, { duration: 0.3, opacity: 0.95 });
+              }
+          });
+      });
+
+      link.addEventListener('mouseleave', () => {
+          tl.reverse();
+          navLinks.forEach(otherLink => {
+              gsap.to(otherLink, { duration: 0.3, opacity: 1 });
+          });
       });
   });
 };
